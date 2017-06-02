@@ -1,17 +1,23 @@
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-from keras.datasets import cifar10
+from keras.datasets import cifar10, mnist
 
-batch_size = 256
+batch_size = 512
 learning_rate = 1e-3
 epoch = 10000
 
 
-class CifarData:
-    def __init__(self):
-        (self._data, _), _ = cifar10.load_data()
+class Data:
+    def __init__(self, dataset='cifar10'):
+        if dataset == 'cifar10':
+            data_cls = cifar10
+        elif dataset == 'mnist':
+            data_cls = mnist
+        (self._data, _), _ = data_cls.load_data()
         self._data = self._data
+        if dataset == 'mnist':
+            self._data = np.reshape(self._data, (*self._data.shape, 1))
     
     def _epoch(self, batch_size):
         i = 0
@@ -32,7 +38,7 @@ class CifarData:
                 gen = self._epoch(batch_size)
 
 
-x_image = tf.placeholder(tf.float32, shape=[None, 32, 32, 3])
+x_image = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 z_in = tf.placeholder(tf.float32, shape=[batch_size, 100])
 initializer = tf.truncated_normal_initializer(stddev=0.02)
 
@@ -44,19 +50,19 @@ def lrelu(x, leak=0.2, name="lrelu"):
 
 def generator(z):
     with tf.variable_scope("generator"):
-        fc1 = tf.contrib.layers.fully_connected(inputs=z, num_outputs=8*8*128, activation_fn=tf.nn.relu, \
+        fc1 = tf.contrib.layers.fully_connected(inputs=z, num_outputs=7*7*128, activation_fn=tf.nn.relu, \
                                                 normalizer_fn=tf.contrib.layers.batch_norm,\
                                                 weights_initializer=initializer,scope="g_fc1")
-        fc1 = tf.reshape(fc1, shape=[batch_size, 8, 8, 128])
+        fc1 = tf.reshape(fc1, shape=[batch_size, 7, 7, 128])
         conv1 = tf.contrib.layers.conv2d(fc1, num_outputs=4*64, kernel_size=5, stride=1, padding="SAME",    \
                                         activation_fn=tf.nn.relu, normalizer_fn=tf.contrib.layers.batch_norm, \
                                         weights_initializer=initializer,scope="g_conv1")
-        conv1 = tf.reshape(conv1, shape=[batch_size,16, 16,64])
+        conv1 = tf.reshape(conv1, shape=[batch_size,14, 14,64])
         conv2 = tf.contrib.layers.conv2d(conv1, num_outputs=4*32, kernel_size=5, stride=1, padding="SAME", \
                                         activation_fn=tf.nn.relu,normalizer_fn=tf.contrib.layers.batch_norm, \
                                         weights_initializer=initializer,scope="g_conv2")
-        conv2 = tf.reshape(conv2, shape=[batch_size,32, 32, 32])
-        conv3 = tf.contrib.layers.conv2d(conv2, num_outputs=3, kernel_size=5, stride=1, padding="SAME", \
+        conv2 = tf.reshape(conv2, shape=[batch_size,28, 28, 32])
+        conv3 = tf.contrib.layers.conv2d(conv2, num_outputs=1, kernel_size=5, stride=1, padding="SAME", \
                                         activation_fn=tf.nn.sigmoid,scope="g_conv3")
         return conv3
 
@@ -68,7 +74,7 @@ def discriminator(tensor,reuse=False):
         conv2 = tf.contrib.layers.conv2d(inputs=conv1, num_outputs=64, kernel_size=5, stride=2, padding="SAME", \
                                         reuse=reuse, activation_fn=lrelu,normalizer_fn=tf.contrib.layers.batch_norm,\
                                         weights_initializer=initializer,scope="d_conv2")
-        fc1 = tf.reshape(conv2, shape=[batch_size, 8*8*64])
+        fc1 = tf.reshape(conv2, shape=[batch_size, 7*7*64])
         fc1 = tf.contrib.layers.fully_connected(inputs=fc1, num_outputs=512,reuse=reuse, activation_fn=lrelu, \
                                                 normalizer_fn=tf.contrib.layers.batch_norm, \
                                                 weights_initializer=initializer,scope="d_fc1")
@@ -94,9 +100,9 @@ update_G = g_optimizer.apply_gradients(g_grads)
 init = tf.global_variables_initializer()
 with tf.Session() as sess:
     sess.run(init)
-    cifar = CifarData().get_data(epoch, batch_size)
+    data = Data('mnist').get_data(epoch, batch_size)
     for i in range(epoch):
-        batch = next(cifar)
+        batch = next(data)
         z_input = np.random.uniform(0,1.0,size=[batch_size,100]).astype(np.float32)
         _, d_loss = sess.run([update_D,disc_loss],feed_dict={x_image: batch, z_in: z_input})
         for j in range(4):
